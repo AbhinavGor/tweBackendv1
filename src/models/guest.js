@@ -4,7 +4,7 @@ const bcrypt = require("bcryptjs")
 const jwt = require("jsonwebtoken")
 require('dotenv').config();
 
-const userSchema = mongoose.Schema({
+const guestSchema = mongoose.Schema({
   name: {
     type: String,
     required: true
@@ -28,17 +28,18 @@ const userSchema = mongoose.Schema({
     minlength: 7,
   },
 
-  department: {
+  club: {
       type: String,
-    //   required: true,
+      required: true,
       trim:true,
       lowercase:true,
-      validate(value){
-          if(value!="twe" && value!="editorial") {
-              throw new Error("department can be only twe or editorial")
-          }
-      }
   },
+
+  isLocked: {
+    type: Boolean,
+    default: false
+  },
+
   tokens: [{
     token: {
         type: String,
@@ -46,27 +47,13 @@ const userSchema = mongoose.Schema({
     }
 }],
 
-resetPasswordToken: {
-    type: String,
-},
-
-resetPasswordExpires: {
-    type: Date,
-},
-
   avatar: {
       type: Buffer
   },
 
-  isAdmin:{
-      type: Boolean,
-      required:true,
-      default: false
-  },
-
   userType: {
     type: Number,
-    default: 0
+    default: -1
   },
 
   onboarding: {
@@ -87,6 +74,7 @@ resetPasswordExpires: {
         type: Number,
         default:0
     },
+
     myTotalNewsContibution: {
         type: Number,
         default:0
@@ -112,32 +100,23 @@ resetPasswordExpires: {
     timestamps: true
 });
 
-//establishing a relationshipt between user and articles
 
-// userSchema.virtual( "articles", {
-//     ref: "Article",
-//     localField: "_id",
-//     foreignField : "author"
-// })
-
-//Find and login users
-
-userSchema.statics.findByCredentials = async (email, password) => {
-    const findUser = await User.findOne({ email })
-    if(!findUser) {
+guestSchema.statics.findByCredentials = async (email, password) => {
+    const findGuest = await Guest.findOne({ email })
+    if(!findGuest) {
         throw new Error ("Unable to Login!")
     }
-    const isMatch = await bcrypt.compare(password, findUser.password)
+    const isMatch = await bcrypt.compare(password, findGuest.password)
 
     if(!isMatch) {
         throw new Error("Unable to Login!")
     }
-    return findUser
+    return findGuest
 
 }
 
 //hash plain text password before save
-userSchema.pre("save", async function(next) {
+guestSchema.pre("save", async function(next) {
     const user = this
     if (user.isModified("password")) {
         user.password = await bcrypt.hash(user.password, 8)
@@ -149,7 +128,7 @@ userSchema.pre("save", async function(next) {
 
 // return public profile whenever user info is returned ( hide password and token history)
 
-userSchema.methods.toJSON = function () {
+guestSchema.methods.toJSON = function () {
     const user = this
     const userObject = user.toObject()
 
@@ -160,26 +139,25 @@ userSchema.methods.toJSON = function () {
     return userObject
 }
 
-//Token generation and appending in model
-userSchema.methods.generateToken = async function () {
-    const findUser = this
-    const token = jwt.sign({ _id:findUser._id.toString(), isAdmin:findUser.isAdmin.toString() }, process.env.JWT_SECRET)
+guestSchema.methods.generateToken = async function () {
+    const findGuest = this
+    const token = jwt.sign({ _id:findGuest._id.toString(), isAdmin:findGuest.isAdmin.toString() }, process.env.JWT_SECRET)
 
-    findUser.tokens = findUser.tokens.concat({ token })
-    // console.log("TOKEN ADDED:",findUser)
-    await findUser.save()
+    findGuest.tokens = findGuest.tokens.concat({ token })
+    // console.log("TOKEN ADDED:",findGuest)
+    await findGuest.save()
     return token
 
 }
 
 //Password reset token generation
-userSchema.methods.generatePasswordReset =  function(){
+guestSchema.methods.generatePasswordReset =  function(){
     this.resetPasswordToken = jwt.sign({ _id:this._id.toString() }, process.env.JWT_SECRET)
     this.resetPasswordExpires = Date.now() + 3600000;
   };
 
 
 
-const User = mongoose.model('User', userSchema);
+const Guest = mongoose.model('Guest', guestSchema);
 
-module.exports = User;
+module.exports = Guest;
